@@ -1,67 +1,149 @@
-# Payload Blank Template
+# ClashCode Backend
 
-This template comes configured with the bare minimum to get started on anything you need.
+Payload CMS 3 backend for a 1v1 competitive coding platform. Two players are
+matched through a queue, get the same problem, and the **first accepted
+submission wins**. The backend is authoritative for match state, submissions,
+judging and winner determination.
 
-## Quick start
+## Stack
 
-This template can be deployed directly from our Cloud hosting and it will setup MongoDB and cloud S3 object storage for media.
+- **Payload CMS 3** (Next.js runtime) + **PostgreSQL** — users, problems, test cases, matches, submissions
+- **Redis** — matchmaking queue, BullMQ jobs, rate limits, disconnect grace timers
+- **BullMQ workers** (separate process) — judge pipeline, matchmaker tick, match sweeper (timeouts / disconnect forfeits)
+- **Socket.IO** (attached to the same server, Redis adapter) — realtime match updates
+- **Piston** (self-hosted, Docker) — sandboxed code execution
+- Local judge provider — dev convenience on machines where the Piston image can't run (e.g. Apple Silicon); **never use in production**
 
-## Quick Start - local setup
+## Quick start (local dev)
 
-To spin up this template locally, follow these steps:
+```sh
+# 1. Infrastructure: Postgres, Redis, Piston
+docker compose up -d
 
-### Clone
+# 2. Install language runtimes into Piston (one time; persisted in a docker volume)
+npm run piston:install-packages
 
-After you click the `Deploy` button above, you'll want to have standalone copy of this repo on your machine. If you've already cloned this repo, skip to [Development](#development).
+# 3. Seed users + problems (admin, alice, bob + 5 problems with public/hidden tests)
+npm run seed
 
-### Development
+# 4. Backend API + admin + Socket.IO  -> http://localhost:3000
+npm run dev
 
-1. First [clone the repo](#clone) if you have not done so already
-2. `cd my-project && cp .env.example .env` to copy the example environment variables. You'll need to add the `MONGODB_URL` from your Cloud project to your `.env` if you want to use S3 storage and the MongoDB database that was created for you.
+# 5. Workers (judge, matchmaker, sweeper) — separate terminal
+npm run workers
+```
 
-3. `pnpm install && pnpm dev` to install dependencies and start the dev server
-4. open `http://localhost:3000` to open the app in your browser
+Frontend lives in the sibling `frontend/` repo (Next.js on :3001).
 
-That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
+### Seeded accounts
 
-#### Docker (Optional)
+| username | password | role |
+|---|---|---|
+| admin | AdminPass123! | admin (Payload admin panel at `/admin`) |
+| alice | password123 | user |
+| bob | password123 | user |
 
-If you prefer to use Docker for local development instead of a local MongoDB instance, the provided docker-compose.yml file can be used.
+### Language runtimes
 
-To do so, follow these steps:
+`npm run piston:install-packages` installs `python`, `node` (JavaScript), `gcc`
+(C++) and `go`. If a runtime is missing (e.g. C++ was skipped), submissions in
+that language fail with a judge error telling you to install it — everything
+else keeps working. Re-running the script is idempotent.
 
-- Modify the `MONGODB_URL` in your `.env` file to `mongodb://127.0.0.1/<dbname>`
-- Modify the `docker-compose.yml` file's `MONGODB_URL` to match the above `<dbname>`
-- Run `docker-compose up` to start the database, optionally pass `-d` to run in the background.
+## Judge providers
 
-## How it works
+`JUDGE_PROVIDER` env var:
 
-The Payload config is tailored specifically to the needs of most websites. It is pre-configured in the following ways:
+- **`piston`** (default) — executes via the self-hosted Piston API. Use on
+  production/amd64 hosts. Piston's isolate sandbox needs native Linux; on
+  Apple Silicon the amd64 image cannot execute (isolate's `clone` fails under
+  emulation).
+- **`local`** — executes code directly on the host with timeouts and output
+  caps. Development convenience only, not a sandbox. Requires `python3`,
+  `node`, `g++`/`go` on the host.
 
-### Collections
+## How a match works
 
-See the [Collections](https://payloadcms.com/docs/configuration/collections) docs for details on how to extend this functionality.
+1. `POST /api/matchmaking/join` — adds the user to a FIFO Redis sorted set.
+2. A repeatable BullMQ job (1s) pops the two oldest players atomically (Lua),
+   picks a random problem (avoiding each player's last 3 problems) and creates
+   the match. Both players receive `match:start` over Socket.IO.
+3. **Run** (`POST /api/match/run`) executes against **public tests only**, is
+   not stored, and does not affect the match.
+4. **Submit** (`POST /api/match/submit`) creates a pending submission and
+   enqueues a judge job. The worker executes against **all** tests (public +
+   hidden), stores per-test results (hidden tests: pass/fail only — their
+   inputs/outputs never leave the server), and on full acceptance atomically
+   claims the match:
+   `UPDATE matches ... WHERE id = $1 AND status = 'active'` — the first
+   accepted submission wins; concurrent racers lose the claim cleanly.
+5. Elo is applied on finish. K factor derives from problem difficulty:
+   easy=16, medium=32, hard=48, insane=64. Draws (timeout) change no rating;
+   forfeits count as a rated loss for the leaver.
+6. **Timeouts**: each problem has `timeLimitSeconds`; the sweeper ends the
+   match in a draw when it expires.
+7. **Disconnects**: closing all sockets starts a 75s grace timer; the sweeper
+   awards the win to the opponent if the player does not reconnect.
 
-- #### Users (Authentication)
+## API (custom endpoints)
 
-  Users are auth-enabled collections that have access to the admin panel.
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/matchmaking/join` | join the queue |
+| POST | `/api/matchmaking/leave` | leave the queue |
+| GET | `/api/match/active` | the caller's active match id |
+| GET | `/api/match/view?matchId=` | sanitized match page payload (statement, public examples, own submissions, opponent stats) |
+| POST | `/api/match/run` | `{ matchId, language, code }` — run against public tests |
+| POST | `/api/match/submit` | `{ matchId, language, code }` — judged on all tests |
+| POST | `/api/match/forfeit` | concede the match |
+| GET | `/api/match/history` | caller's match history |
+| GET | `/api/leaderboard` | top players by rating |
 
-  For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/3.x/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
+Auth: `Authorization: JWT <token>` from `POST /api/users/login`
+(username + password only).
 
-- #### Media
+## Realtime events (Socket.IO)
 
-  This is the uploads enabled collection. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
+Rooms: `user:<id>`, `match:<id>`. Auth via the same JWT in the handshake
+(`auth: { token }`).
 
-### Docker
+- `match:start` / `match:resume` (user room)
+- `match:progress` (match room) — both players' live stats
+- `submission:result` (author only) — full per-test results (hidden tests still sanitized)
+- `match:finished` — winner, end reason, rating deltas
+- `match:disconnected` / `match:reconnected` — opponent connection status + grace countdown
 
-Alternatively, you can use [Docker](https://www.docker.com) to spin up this template locally. To do so, follow these steps:
+## Data model
 
-1. Follow [steps 1 and 2 from above](#development), the docker-compose file will automatically use the `.env` file in your project root
-1. Next run `docker-compose up`
-1. Follow [steps 4 and 5 from above](#development) to login and create your first admin user
+- **users** — username+password (`loginWithUsername`), role, rating (default 1200), W/L/D
+- **problems** — title, slug, difficulty, `timeLimitSeconds` (per-problem match duration), `cpuTimeSeconds` (per-test limit), lexical statement, constraints, per-language starter templates. Deletion blocked once used in a match
+- **test-cases** — input (stdin), expected output, `isPublic`, order. Read access is **admin-only**; user-facing surfaces only ever see public test data or sanitized results
+- **matches** — players, problem, status, endReason (solved/timeout/forfeit/aborted), winner, timestamps, per-player live stats, rating snapshot
+- **submissions** — match, author, language, code, status, per-test results, created via backend logic only
 
-That's it! The Docker instance will help you get up and running quickly while also standardizing the development environment across your teams.
+## Edge cases handled
 
-## Questions
+- matchmaking race — atomic Lua pop + Redis in-match markers + DB re-check
+- double-join / queue while in an active match — 409
+- concurrent accepted submissions — single atomic conditional update decides the winner
+- submission after match end — rejected
+- rate limits — min 10s between submissions, 50 per match, run/join/login limits
+- Judge unavailable — job retries with backoff, submission marked `judge_error`, match continues
+- problem deleted mid-pool — delete blocked once used in matches
+- stale disconnect markers — sweeper reconciles with the DB
 
-If you have any issues or questions, reach out to us on [Discord](https://discord.com/invite/payload) or start a [GitHub discussion](https://github.com/payloadcms/payload/discussions).
+## Scripts
+
+| script | purpose |
+|---|---|
+| `npm run dev` | backend dev server (Next + Socket.IO) |
+| `npm run workers` | BullMQ workers |
+| `npm run seed` | seed users/problems/test cases |
+| `npm run piston:install-packages` | install Piston language runtimes |
+| `npm test` | unit tests (Elo, output normalization, sanitization) |
+| `npm run lint` / `npx tsc --noEmit` | lint / typecheck |
+
+## Env vars
+
+See `.env.example`: `DATABASE_URL`, `PAYLOAD_SECRET`, `REDIS_URL`,
+`PISTON_URL`, `JUDGE_PROVIDER`, `SERVER_URL`, `FRONTEND_URL`.

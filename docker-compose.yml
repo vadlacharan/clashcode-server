@@ -1,43 +1,47 @@
-version: '3'
-
 services:
-  payload:
-    image: node:20-alpine
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clashcode
+      POSTGRES_PASSWORD: clashcode
+      POSTGRES_DB: clashcode
     ports:
-      - '3000:3000'
+      - '5432:5432'
     volumes:
-      - .:/home/node/app
-      - node_modules:/home/node/app/node_modules
-    working_dir: /home/node/app/
-    command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm dev"
-    depends_on:
-      - mongo
-      # - postgres
-    env_file:
-      - .env
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U clashcode']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # Ensure your DATABASE_URL uses 'mongo' as the hostname ie. mongodb://mongo/my-db-name
-  mongo:
-    image: mongo:latest
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - '27017:27017'
-    command:
-      - --storageEngine=wiredTiger
-    volumes:
-      - data:/data/db
-    logging:
-      driver: none
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # Uncomment the following to use postgres
-  # postgres:
-  #   restart: always
-  #   image: postgres:latest
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
+  piston:
+    image: ghcr.io/engineer-man/piston
+    restart: unless-stopped
+    privileged: true
+    environment:
+      PISTON_RUN_TIMEOUT: '15000'
+      PISTON_COMPILE_TIMEOUT: '15000'
+      PISTON_OUTPUT_MAX_SIZE: '65536'
+    ports:
+      - '2000:2000'
+    volumes:
+      - piston_packages:/piston/packages
+    tmpfs:
+      - /tmp:exec
 
 volumes:
-  data:
-  # pgdata:
-  node_modules:
+  pgdata:
+  piston_packages:

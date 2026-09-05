@@ -68,7 +68,10 @@ export interface Config {
   blocks: {};
   collections: {
     users: User;
-    media: Media;
+    problems: Problem;
+    'test-cases': TestCase;
+    matches: Match;
+    submissions: Submission;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -77,14 +80,17 @@ export interface Config {
   collectionsJoins: {};
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
-    media: MediaSelect<false> | MediaSelect<true>;
+    problems: ProblemsSelect<false> | ProblemsSelect<true>;
+    'test-cases': TestCasesSelect<false> | TestCasesSelect<true>;
+    matches: MatchesSelect<false> | MatchesSelect<true>;
+    submissions: SubmissionsSelect<false> | SubmissionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
   };
   db: {
-    defaultIDType: string;
+    defaultIDType: number;
   };
   fallbackLocale: null;
   globals: {};
@@ -101,20 +107,18 @@ export interface Config {
 }
 export interface UserAuthOperations {
   forgotPassword: {
-    email: string;
-    password: string;
+    username: string;
   };
   login: {
-    email: string;
     password: string;
+    username: string;
   };
   registerFirstUser: {
-    email: string;
     password: string;
+    username: string;
   };
   unlock: {
-    email: string;
-    password: string;
+    username: string;
   };
 }
 /**
@@ -122,10 +126,16 @@ export interface UserAuthOperations {
  * via the `definition` "users".
  */
 export interface User {
-  id: string;
+  id: number;
+  role: 'user' | 'admin';
+  rating?: number | null;
+  wins?: number | null;
+  losses?: number | null;
+  draws?: number | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
+  email?: string | null;
+  username: string;
   resetPasswordToken?: string | null;
   resetPasswordExpiration?: string | null;
   salt?: string | null;
@@ -144,29 +154,163 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
+ * via the `definition` "problems".
  */
-export interface Media {
-  id: string;
-  alt: string;
+export interface Problem {
+  id: number;
+  title: string;
+  slug: string;
+  difficulty: 'easy' | 'medium' | 'hard' | 'insane';
+  /**
+   * Match duration in seconds when this problem is played (60 - 7200)
+   */
+  timeLimitSeconds: number;
+  /**
+   * Per-test execution time limit in seconds (1 - 15)
+   */
+  cpuTimeSeconds?: number | null;
+  statement: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  /**
+   * Input constraints shown to players (plain text)
+   */
+  constraints?: string | null;
+  tags?:
+    | {
+        tag: string;
+        id?: string | null;
+      }[]
+    | null;
+  starterTemplates?:
+    | {
+        language: 'python' | 'javascript' | 'cpp' | 'go';
+        code: string;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "test-cases".
+ */
+export interface TestCase {
+  id: number;
+  problem: number | Problem;
+  /**
+   * e.g. "Example 1" or "Hidden: large input"
+   */
+  label?: string | null;
+  /**
+   * Data passed to the program via stdin
+   */
+  input: string;
+  /**
+   * Exact expected stdout (trailing whitespace is ignored)
+   */
+  expectedOutput: string;
+  /**
+   * Public tests are shown to players as examples
+   */
+  isPublic?: boolean | null;
+  order?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "matches".
+ */
+export interface Match {
+  id: number;
+  playerOne: number | User;
+  playerTwo: number | User;
+  problem: number | Problem;
+  status: 'active' | 'finished' | 'aborted';
+  endReason?: ('solved' | 'timeout' | 'forfeit' | 'aborted') | null;
+  winner?: (number | null) | User;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  playerOneStats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  playerTwoStats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Rating snapshot applied when the match finished
+   */
+  ratings?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "submissions".
+ */
+export interface Submission {
+  id: number;
+  match: number | Match;
+  author: number | User;
+  language: 'python' | 'javascript' | 'cpp' | 'go';
+  code: string;
+  status:
+    'pending' | 'judging' | 'accepted' | 'wrong_answer' | 'runtime_error' | 'compile_error' | 'timeout' | 'judge_error';
+  testResults?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  passedCount?: number | null;
+  totalCount?: number | null;
+  judgedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
-  id: string;
+  id: number;
   key: string;
   data:
     | {
@@ -183,20 +327,32 @@ export interface PayloadKv {
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: string;
+  id: number;
   document?:
     | ({
         relationTo: 'users';
-        value: string | User;
+        value: number | User;
       } | null)
     | ({
-        relationTo: 'media';
-        value: string | Media;
+        relationTo: 'problems';
+        value: number | Problem;
+      } | null)
+    | ({
+        relationTo: 'test-cases';
+        value: number | TestCase;
+      } | null)
+    | ({
+        relationTo: 'matches';
+        value: number | Match;
+      } | null)
+    | ({
+        relationTo: 'submissions';
+        value: number | Submission;
       } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   updatedAt: string;
   createdAt: string;
@@ -206,10 +362,10 @@ export interface PayloadLockedDocument {
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: string;
+  id: number;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   key?: string | null;
   value?:
@@ -229,7 +385,7 @@ export interface PayloadPreference {
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: string;
+  id: number;
   name?: string | null;
   batch?: number | null;
   updatedAt: string;
@@ -240,9 +396,15 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  role?: T;
+  rating?: T;
+  wins?: T;
+  losses?: T;
+  draws?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
+  username?: T;
   resetPasswordToken?: T;
   resetPasswordExpiration?: T;
   salt?: T;
@@ -259,21 +421,81 @@ export interface UsersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media_select".
+ * via the `definition` "problems_select".
  */
-export interface MediaSelect<T extends boolean = true> {
-  alt?: T;
+export interface ProblemsSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  difficulty?: T;
+  timeLimitSeconds?: T;
+  cpuTimeSeconds?: T;
+  statement?: T;
+  constraints?: T;
+  tags?:
+    | T
+    | {
+        tag?: T;
+        id?: T;
+      };
+  starterTemplates?:
+    | T
+    | {
+        language?: T;
+        code?: T;
+        id?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
-  url?: T;
-  thumbnailURL?: T;
-  filename?: T;
-  mimeType?: T;
-  filesize?: T;
-  width?: T;
-  height?: T;
-  focalX?: T;
-  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "test-cases_select".
+ */
+export interface TestCasesSelect<T extends boolean = true> {
+  problem?: T;
+  label?: T;
+  input?: T;
+  expectedOutput?: T;
+  isPublic?: T;
+  order?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "matches_select".
+ */
+export interface MatchesSelect<T extends boolean = true> {
+  playerOne?: T;
+  playerTwo?: T;
+  problem?: T;
+  status?: T;
+  endReason?: T;
+  winner?: T;
+  startedAt?: T;
+  endedAt?: T;
+  playerOneStats?: T;
+  playerTwoStats?: T;
+  ratings?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "submissions_select".
+ */
+export interface SubmissionsSelect<T extends boolean = true> {
+  match?: T;
+  author?: T;
+  language?: T;
+  code?: T;
+  status?: T;
+  testResults?: T;
+  passedCount?: T;
+  totalCount?: T;
+  judgedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

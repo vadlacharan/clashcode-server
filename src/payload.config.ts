@@ -6,7 +6,12 @@ import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
 import { Users } from './collections/Users'
-import { Media } from './collections/Media'
+import { Problems } from './collections/Problems'
+import { TestCases } from './collections/TestCases'
+import { Matches } from './collections/Matches'
+import { Submissions } from './collections/Submissions'
+import endpoints from './endpoints'
+import { env } from './lib/config'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -18,7 +23,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media],
+  collections: [Users, Problems, TestCases, Matches, Submissions],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
@@ -30,5 +35,9 @@ export default buildConfig({
     },
   }),
   sharp,
+  serverURL: env.serverUrl,
+  cors: [env.frontendUrl, env.serverUrl],
+  csrf: [env.frontendUrl, env.serverUrl],
+  endpoints,
   plugins: [],
 })
