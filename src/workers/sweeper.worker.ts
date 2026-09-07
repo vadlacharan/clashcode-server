@@ -25,6 +25,9 @@ export async function runSweepOnce(payload: Payload): Promise<void> {
     const playerTwoId = refId(match.playerTwo)
     if (!playerOneId || !playerTwoId) continue
 
+    // Solo sessions never time out or forfeit — the player ends them manually.
+    if (match.mode === 'solo') continue
+
     try {
       // 1) Match timeout -> draw
       if (match.startedAt) {

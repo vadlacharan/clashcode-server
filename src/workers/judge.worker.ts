@@ -13,6 +13,7 @@ import {
 } from '../lib/matchService'
 import { toStoredTestResults } from '../lib/sanitize'
 import { emitMatch, emitUser } from '../lib/events'
+import { harnessFromProblem } from '../lib/harness'
 import type { JudgeJobData } from '../queues/judgeQueue'
 
 export async function processJudgeJob(payload: Payload, job: Job<JudgeJobData>): Promise<void> {
@@ -105,12 +106,14 @@ export async function processJudgeJob(payload: Payload, job: Job<JudgeJobData>):
     expectedOutput: (t as { expectedOutput?: string }).expectedOutput ?? '',
   }))
 
+
   try {
     const outcomes = await runAgainstTests({
       code: submission.code,
       language: submission.language as never,
       tests: testInputs,
       cpuTimeSeconds: problem.cpuTimeSeconds ?? undefined,
+      harness: harnessFromProblem(problem) ?? undefined,
     })
 
     const finalStatus = deriveSubmissionStatus(outcomes)
@@ -158,6 +161,28 @@ export async function processJudgeJob(payload: Payload, job: Job<JudgeJobData>):
       overrideAccess: true,
       depth: 0,
     })
+
+    if (match.mode === 'solo') {
+      // Solo practice: no opponent, no Elo. On full acceptance the session
+      // ends as 'solved'; the client is notified like a duel finish.
+      if (finalStatus === 'accepted') {
+        const claimed = await claimFinish(payload, matchId, { endReason: 'solved' })
+        if (claimed) {
+          const finishedPayload = {
+            matchId: String(matchId),
+            endReason: 'solved',
+            draw: false,
+            winnerId: null,
+            mode: 'solo' as const,
+            ratings: null,
+          }
+          emitUser(authorId, 'match:finished', finishedPayload)
+        } else {
+          console.warn(`[judge] solo match ${matchId} could not be claimed as solved`)
+        }
+      }
+      return
+    }
 
     const playerOneId = refId(match.playerOne)!
     const playerTwoId = refId(match.playerTwo)!

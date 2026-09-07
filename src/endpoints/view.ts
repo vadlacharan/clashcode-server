@@ -36,16 +36,28 @@ export async function viewMatch(req: PayloadRequest): Promise<Response> {
 
     const side = participantSide(match, user.id)
     if (!side) return notFound('Match not found')
+    const isSolo = (match as { mode?: string }).mode === 'solo'
 
     const playerOneId = refId(match.playerOne)!
-    const playerTwoId = refId(match.playerTwo)!
+    const playerTwoId = isSolo ? null : refId(match.playerTwo)
     const myId = user.id
     const opponentId = side === 'playerOne' ? playerTwoId : playerOneId
 
-    const [me, opponent] = await Promise.all([
-      req.payload.findByID({ collection: 'users', id: myId, depth: 0, overrideAccess: true }),
-      req.payload.findByID({ collection: 'users', id: opponentId, depth: 0, overrideAccess: true }),
-    ])
+    const me = await req.payload.findByID({
+      collection: 'users',
+      id: myId,
+      depth: 0,
+      overrideAccess: true,
+    })
+    const opponent =
+      opponentId != null
+        ? await req.payload.findByID({
+            collection: 'users',
+            id: opponentId,
+            depth: 0,
+            overrideAccess: true,
+          })
+        : null
 
     const problemId = refId(match.problem)
     const problem = (await req.payload.findByID({
@@ -89,17 +101,20 @@ export async function viewMatch(req: PayloadRequest): Promise<Response> {
       rating: Number((me as { rating?: number }).rating) || DEFAULT_RATING,
       stats: side === 'playerOne' ? rawOneStats : rawTwoStats,
     }
-    const opponentPlayer = {
-      userId: opponentId,
-      username: (opponent as { username?: string }).username ?? null,
-      rating: Number((opponent as { rating?: number }).rating) || DEFAULT_RATING,
-      stats: side === 'playerOne' ? rawTwoStats : rawOneStats,
-    }
+    const opponentPlayer = opponent
+      ? {
+          userId: opponentId!,
+          username: (opponent as { username?: string }).username ?? null,
+          rating: Number((opponent as { rating?: number }).rating) || DEFAULT_RATING,
+          stats: side === 'playerOne' ? rawTwoStats : rawOneStats,
+        }
+      : null
 
     return Response.json({
       serverTime: new Date().toISOString(),
       match: {
         id: String(match.id),
+        mode: (match as { mode?: string }).mode ?? 'duel',
         status: match.status,
         endReason: match.endReason ?? null,
         startedAt: match.startedAt ?? null,
@@ -117,6 +132,14 @@ export async function viewMatch(req: PayloadRequest): Promise<Response> {
         statement: problem.statement,
         constraints: problem.constraints ?? null,
         difficulty: problem.difficulty,
+        judgeMode: problem.judgeMode ?? 'function',
+        functionName: problem.functionName ?? null,
+        params:
+          (problem.params as { name: string; type: string }[] | undefined)?.map((p) => ({
+            name: p.name,
+            type: p.type,
+          })) ?? [],
+        returnType: problem.returnType ?? null,
         starterTemplates: (problem.starterTemplates as { language: string; code: string }[]) ?? [],
         totalTests: allTests.length,
         publicTests,

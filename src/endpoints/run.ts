@@ -1,6 +1,7 @@
 import type { PayloadRequest } from 'payload'
 import { KEYS, MAX_CODE_LENGTH, RUN_RATE_LIMIT, type LanguageId, LANGUAGE_IDS } from '../lib/config'
 import { runAgainstTests, type TestInput } from '../lib/judge'
+import { harnessFromProblem } from '../lib/harness'
 import { participantSide, type MatchDoc } from '../lib/matchService'
 import { sanitizeTestResults } from '../lib/sanitize'
 import { rateLimit } from '../lib/rateLimit'
@@ -82,6 +83,7 @@ export async function runCode(req: PayloadRequest): Promise<Response> {
       language: language as LanguageId,
       tests: testInputs,
       cpuTimeSeconds: problem.cpuTimeSeconds ?? undefined,
+      harness: harnessFromProblem(problem) ?? undefined,
     })
 
     return Response.json({ results: sanitizeTestResults(outcomes, true) })

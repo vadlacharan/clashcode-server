@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose*.yml
+*.log
+src/scripts/*.ts
+!src/scripts/seed.ts
+!src/scripts/install-piston-packages.ts
+.env.production

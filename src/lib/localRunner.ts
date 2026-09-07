@@ -161,6 +161,19 @@ export async function runAgainstTestsLocal(opts: {
         status = compareOutputs(result.stdout, test.expectedOutput) ? 'accepted' : 'wrong_answer'
       }
 
+      // Always give the player something to look at: when the process failed
+      // without writing to stderr, surface the exit condition itself.
+      let stderr = result.stderr
+      if (!stderr && status !== 'accepted' && status !== 'wrong_answer') {
+        if (result.timedOut) {
+          stderr = `Process killed: exceeded the ${runTimeoutMs}ms execution limit`
+        } else if (result.code === null && result.signal) {
+          stderr = `Process killed by signal ${result.signal}`
+        } else if (result.code !== 0) {
+          stderr = `Process exited with code ${result.code}`
+        }
+      }
+
       outcomes.push({
         index: test.index,
         isPublic: test.isPublic,
@@ -168,7 +181,7 @@ export async function runAgainstTestsLocal(opts: {
         status,
         timeMs: null,
         stdout: result.stdout.length > 0 ? result.stdout : null,
-        stderr: result.stderr.length > 0 ? result.stderr : null,
+        stderr: stderr && stderr.length > 0 ? stderr : null,
         compileOutput,
         judgeStatusId: null,
       })

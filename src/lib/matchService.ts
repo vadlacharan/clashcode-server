@@ -182,6 +182,7 @@ export async function createMatchForPlayers(
     data: {
       playerOne: Number(opts.playerOneId),
       playerTwo: Number(opts.playerTwoId),
+      mode: 'duel',
       problem: Number(opts.problemId),
       status: 'active',
       startedAt: new Date().toISOString(),

@@ -10,6 +10,7 @@ import {
 } from './config'
 import { getRedis } from '../queues/connection'
 import { runAgainstTestsLocal } from './localRunner'
+import { wrapFunctionCode, type FunctionHarness } from './harness'
 
 export type TestOutcomeStatus =
   | 'accepted'
@@ -186,13 +187,22 @@ function toOutcome(test: TestInput, resp: PistonExecResponse): TestOutcome {
       : 'wrong_answer'
   })()
 
+  // Surface the exit condition when the process failed without stderr.
+  let stderr = run.stderr && run.stderr.length > 0 ? run.stderr : null
+  if (!stderr && status !== 'accepted' && status !== 'wrong_answer') {
+    if (status === 'timeout') stderr = `Process killed: exceeded the execution time limit`
+    else if (run.message) stderr = run.message
+    else if (run.code !== null) stderr = `Process exited with code ${run.code}`
+    else if (run.signal) stderr = `Process killed by signal ${run.signal}`
+  }
+
   return {
     ...base,
     passed: status === 'accepted',
     status,
     timeMs: typeof run.wall_time === 'number' ? Math.round(run.wall_time) : null,
     stdout: (run.stdout ?? '').length > 0 ? run.stdout! : null,
-    stderr: (run.stderr ?? '').length > 0 ? run.stderr! : null,
+    stderr,
     compileOutput: resp.compile?.output || null,
     judgeStatusId: null,
   }
@@ -201,17 +211,24 @@ function toOutcome(test: TestInput, resp: PistonExecResponse): TestOutcome {
 /**
  * Executes code against a list of tests. Dispatches to the configured judge
  * provider: 'piston' (sandboxed, production) or 'local' (dev convenience).
+ * When a function-mode harness is given, the player's function-only code is
+ * wrapped into a complete program that reads JSON args and prints the return.
  */
 export async function runAgainstTests(opts: {
   code: string
   language: LanguageId
   tests: TestInput[]
   cpuTimeSeconds?: number
+  harness?: FunctionHarness
 }): Promise<TestOutcome[]> {
+  const code =
+    opts.harness != null
+      ? wrapFunctionCode({ code: opts.code, language: opts.language, harness: opts.harness })
+      : opts.code
   if (env.judgeProvider === 'local') {
-    return runAgainstTestsLocal(opts)
+    return runAgainstTestsLocal({ ...opts, code })
   }
-  return runAgainstTestsPiston(opts)
+  return runAgainstTestsPiston({ ...opts, code })
 }
 
 async function runAgainstTestsPiston(opts: {

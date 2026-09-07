@@ -162,6 +162,22 @@ export interface Problem {
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard' | 'insane';
   /**
+   * Function mode: players write only a function; args are parsed from JSON lines and the return value is compared against expected output.
+   */
+  judgeMode: 'function' | 'stdio';
+  /**
+   * e.g. maxSubArray — the function players implement
+   */
+  functionName?: string | null;
+  params?:
+    | {
+        name: string;
+        type: 'number' | 'number[]' | 'number[][]' | 'string' | 'string[]' | 'boolean' | 'boolean[]';
+        id?: string | null;
+      }[]
+    | null;
+  returnType?: ('number' | 'number[]' | 'number[][]' | 'string' | 'string[]' | 'boolean' | 'boolean[]') | null;
+  /**
    * Match duration in seconds when this problem is played (60 - 7200)
    */
   timeLimitSeconds: number;
@@ -216,11 +232,11 @@ export interface TestCase {
    */
   label?: string | null;
   /**
-   * Data passed to the program via stdin
+   * Function-mode problems: ONE JSON-encoded argument per line — e.g. "9", "[2,7,11,15]", "\"abc\"", "true". Program-mode problems: raw stdin data.
    */
   input: string;
   /**
-   * Exact expected stdout (trailing whitespace is ignored)
+   * Function-mode problems: JSON-encoded return value — e.g. "7", "[0,1]", "true". Program-mode problems: exact stdout. Trailing whitespace is ignored.
    */
   expectedOutput: string;
   /**
@@ -238,7 +254,8 @@ export interface TestCase {
 export interface Match {
   id: number;
   playerOne: number | User;
-  playerTwo: number | User;
+  playerTwo?: (number | null) | User;
+  mode: 'duel' | 'solo';
   problem: number | Problem;
   status: 'active' | 'finished' | 'aborted';
   endReason?: ('solved' | 'timeout' | 'forfeit' | 'aborted') | null;
@@ -427,6 +444,16 @@ export interface ProblemsSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
   difficulty?: T;
+  judgeMode?: T;
+  functionName?: T;
+  params?:
+    | T
+    | {
+        name?: T;
+        type?: T;
+        id?: T;
+      };
+  returnType?: T;
   timeLimitSeconds?: T;
   cpuTimeSeconds?: T;
   statement?: T;
@@ -468,6 +495,7 @@ export interface TestCasesSelect<T extends boolean = true> {
 export interface MatchesSelect<T extends boolean = true> {
   playerOne?: T;
   playerTwo?: T;
+  mode?: T;
   problem?: T;
   status?: T;
   endReason?: T;

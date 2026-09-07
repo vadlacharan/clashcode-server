@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   attachSocketServer(httpServer)
 
   httpServer.listen(port, () => {
-    console.log(`> ClashCode backend ready on http://${hostname}:${port} (${dev ? 'dev' : 'production'})`)
+    console.log(`> Syntax School backend ready on http://${hostname}:${port} (${dev ? 'dev' : 'production'})`)
     console.log('> Socket.IO attached to the same server')
   })
 }

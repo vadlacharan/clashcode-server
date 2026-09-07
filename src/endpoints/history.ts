@@ -73,9 +73,11 @@ export async function matchHistory(req: PayloadRequest): Promise<Response> {
     }
 
     const history = matches.map((m) => {
+      const mode = (m as { mode?: string }).mode ?? 'duel'
+      const isSolo = mode === 'solo'
       const mySideIsOne = refId(m.playerOne) === user.id
-      const opponentId = mySideIsOne ? refId(m.playerTwo)! : refId(m.playerOne)!
-      const opponent = opponents.get(opponentId)
+      const opponentId = isSolo ? null : mySideIsOne ? refId(m.playerTwo)! : refId(m.playerOne)!
+      const opponent = opponentId != null ? opponents.get(opponentId) : undefined
       const problem = problems.get(String(refId(m.problem)))
       const winnerId = m.winner ? refId(m.winner as never) : null
       const ratings = (m.ratings ?? null) as MatchRatings | null
@@ -83,25 +85,32 @@ export async function matchHistory(req: PayloadRequest): Promise<Response> {
 
       const result =
         m.status === 'aborted'
-          ? 'aborted'
-          : !winnerId
-            ? 'draw'
-            : winnerId === user.id
-              ? 'win'
-              : 'loss'
+          ? 'abandoned'
+          : isSolo
+            ? m.endReason === 'solved'
+              ? 'solved'
+              : 'abandoned'
+            : !winnerId
+              ? 'draw'
+              : winnerId === user.id
+                ? 'win'
+                : 'loss'
 
       return {
         id: String(m.id),
+        mode,
         status: m.status,
         endReason: m.endReason ?? null,
         result,
         createdAt: m.createdAt ?? null,
         endedAt: m.endedAt ?? null,
-        opponent: {
-          id: opponentId,
-          username: opponent?.username ?? null,
-          rating: Number(opponent?.rating) || null,
-        },
+        opponent: opponent
+          ? {
+              id: opponentId!,
+              username: opponent.username ?? null,
+              rating: Number(opponent.rating) || null,
+            }
+          : null,
         problem: {
           id: String(refId(m.problem)),
           title: problem?.title ?? null,

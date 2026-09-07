@@ -34,14 +34,20 @@ export const TestCases: CollectionConfig = {
       type: 'textarea',
       required: true,
       maxLength: 2_000_000,
-      admin: { description: 'Data passed to the program via stdin' },
+      admin: {
+        description:
+          'Function-mode problems: ONE JSON-encoded argument per line — e.g. "9", "[2,7,11,15]", "\\"abc\\"", "true". Program-mode problems: raw stdin data.',
+      },
     },
     {
       name: 'expectedOutput',
       type: 'textarea',
       required: true,
       maxLength: 2_000_000,
-      admin: { description: 'Exact expected stdout (trailing whitespace is ignored)' },
+      admin: {
+        description:
+          'Function-mode problems: JSON-encoded return value — e.g. "7", "[0,1]", "true". Program-mode problems: exact stdout. Trailing whitespace is ignored.',
+      },
     },
     {
       name: 'isPublic',

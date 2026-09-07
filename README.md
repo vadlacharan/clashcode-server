@@ -1,4 +1,4 @@
-# ClashCode Backend
+# Syntax School — Backend
 
 Payload CMS 3 backend for a 1v1 competitive coding platform. Two players are
 matched through a queue, get the same problem, and the **first accepted
@@ -142,6 +142,10 @@ Rooms: `user:<id>`, `match:<id>`. Auth via the same JWT in the handshake
 | `npm run piston:install-packages` | install Piston language runtimes |
 | `npm test` | unit tests (Elo, output normalization, sanitization) |
 | `npm run lint` / `npx tsc --noEmit` | lint / typecheck |
+
+## Deployment
+
+See `../DEPLOYMENT.md` (Azure student VM + Supabase, Docker Compose with Caddy/Piston included).
 
 ## Env vars
 

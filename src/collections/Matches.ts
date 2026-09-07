@@ -23,7 +23,18 @@ export const Matches: CollectionConfig = {
   },
   fields: [
     { name: 'playerOne', type: 'relationship', relationTo: 'users', required: true, index: true },
-    { name: 'playerTwo', type: 'relationship', relationTo: 'users', required: true, index: true },
+    { name: 'playerTwo', type: 'relationship', relationTo: 'users', index: true },
+    {
+      name: 'mode',
+      type: 'select',
+      required: true,
+      defaultValue: 'duel',
+      index: true,
+      options: [
+        { label: 'Duel (1v1, rated)', value: 'duel' },
+        { label: 'Solo practice (unrated)', value: 'solo' },
+      ],
+    },
     { name: 'problem', type: 'relationship', relationTo: 'problems', required: true, index: true },
     {
       name: 'status',

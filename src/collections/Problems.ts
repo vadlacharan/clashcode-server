@@ -2,11 +2,23 @@ import type { CollectionConfig } from 'payload'
 import { authenticated, isAdmin } from '../access/roles'
 import { DIFFICULTIES, LANGUAGES, type Difficulty } from '../lib/config'
 
+/** Supported function-signature parameter/return types for function-mode problems. */
+export const TYPE_VOCAB = [
+  'number',
+  'number[]',
+  'number[][]',
+  'string',
+  'string[]',
+  'boolean',
+  'boolean[]',
+] as const
+export type ProblemType = (typeof TYPE_VOCAB)[number]
+
 export const Problems: CollectionConfig = {
   slug: 'problems',
   admin: {
     useAsTitle: 'title',
-    defaultColumns: ['title', 'slug', 'difficulty', 'timeLimitSeconds'],
+    defaultColumns: ['title', 'slug', 'difficulty', 'judgeMode', 'timeLimitSeconds'],
   },
   access: {
     read: authenticated,
@@ -15,6 +27,21 @@ export const Problems: CollectionConfig = {
     delete: isAdmin,
   },
   hooks: {
+    beforeChange: [
+      ({ data }) => {
+        if ((data?.judgeMode ?? 'function') === 'function') {
+          if (!data?.functionName) {
+            throw new Error('Function name is required in function judge mode')
+          }
+          if (!data?.returnType) {
+            throw new Error('Return type is required in function judge mode')
+          }
+          if (!data?.params || data.params.length === 0) {
+            throw new Error('At least one parameter is required in function judge mode')
+          }
+        }
+      },
+    ],
     beforeOperation: [
       async ({ req, args, operation }) => {
         if (operation === 'delete') {
@@ -54,6 +81,59 @@ export const Problems: CollectionConfig = {
         label: d.charAt(0).toUpperCase() + d.slice(1),
         value: d,
       })),
+    },
+    {
+      name: 'judgeMode',
+      type: 'select',
+      required: true,
+      defaultValue: 'function',
+      options: [
+        { label: 'Function (LeetCode-style)', value: 'function' },
+        { label: 'Program (stdin/stdout)', value: 'stdio' },
+      ],
+      admin: {
+        description:
+          'Function mode: players write only a function; args are parsed from JSON lines and the return value is compared against expected output.',
+      },
+    },
+    {
+      name: 'functionName',
+      type: 'text',
+      label: 'Function name',
+      admin: {
+        condition: (data) => data?.judgeMode !== 'stdio',
+        description: 'e.g. maxSubArray — the function players implement',
+      },
+      validate: (value: unknown) => {
+        if (value == null || value === '') return true
+        const name = String(value)
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+          return 'Function name must be a valid identifier'
+        }
+        return true
+      },
+    },
+    {
+      name: 'params',
+      type: 'array',
+      label: 'Parameters',
+      admin: { condition: (data) => data?.judgeMode !== 'stdio' },
+      fields: [
+        { name: 'name', type: 'text', required: true },
+        {
+          name: 'type',
+          type: 'select',
+          required: true,
+          options: TYPE_VOCAB.map((t) => ({ label: t, value: t })),
+        },
+      ],
+    },
+    {
+      name: 'returnType',
+      type: 'select',
+      label: 'Return type',
+      admin: { condition: (data) => data?.judgeMode !== 'stdio' },
+      options: TYPE_VOCAB.map((t) => ({ label: t, value: t })),
     },
     {
       name: 'timeLimitSeconds',

@@ -7,6 +7,7 @@ import { submitSolution } from './submit'
 import { forfeitMatch } from './forfeit'
 import { matchHistory } from './history'
 import { leaderboard } from './leaderboard'
+import { startSolve, endSolve } from './solve'
 import {
   sendChallenge,
   acceptChallenge,
@@ -30,6 +31,8 @@ const endpoints: Endpoint[] = [
   { path: '/challenges/decline', method: 'post', handler: declineChallenge },
   { path: '/challenges/cancel', method: 'post', handler: cancelChallenge },
   { path: '/challenges/pending', method: 'get', handler: pendingChallenges },
+  { path: '/solve/start', method: 'post', handler: startSolve },
+  { path: '/solve/end', method: 'post', handler: endSolve },
 ]
 
 export default endpoints
