@@ -1,0 +1,11 @@
+# The API (backend + admin + Socket.IO). Caddy provisions the Let's Encrypt
+# certificate automatically (ports 80/443 must be open on the VM).
+# The FRONTEND lives on Vercel — no proxy block needed for it here.
+#
+# No domain? Use a free DuckDNS subdomain (see DEPLOYMENT.md §4b):
+#   1. https://www.duckdns.org → login → add "syntaxschool" → your VM's IP
+#   2. Caddy gets the TLS certificate automatically for the hostname below.
+
+syntaxschool.duckdns.org {
+	reverse_proxy backend:3000
+}
