@@ -33,7 +33,7 @@ npm run dev
 npm run workers
 ```
 
-Frontend lives in the sibling `frontend/` repo (Next.js on :3001).
+Frontend is a separate repo deployed on Vercel (Next.js on :3001 in dev).
 
 ### Seeded accounts
 

@@ -1,7 +1,11 @@
 # Syntax School — production stack for a single Azure VM.
-# Postgres comes from Supabase (external), everything else runs here:
-# backend (API + admin + Socket.IO), workers (BullMQ), frontend (Next),
-# Redis, Piston (privileged — needs a real Docker VM), Caddy (TLS proxy).
+# Postgres comes from Supabase (external), the frontend deploys on Vercel
+# (separate), and everything else runs here:
+# backend (API + admin + Socket.IO), workers (BullMQ), Redis,
+# Piston (privileged — needs a real Docker VM), Caddy (TLS proxy for the API).
+#
+# Run from the REPO ROOT (where this file lives):
+#   docker compose -f docker-compose.prod.yml up -d --build
 
 services:
   caddy:
@@ -11,18 +15,17 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - backend
-      - frontend
 
   backend:
-    build: ../backend
+    build: .
     restart: unless-stopped
     env_file:
-      - ../backend/.env.production
+      - .env.production
     environment:
       REDIS_URL: redis://redis:6379
       PISTON_URL: http://piston:2000
@@ -35,10 +38,10 @@ services:
     command: ['sh', '-c', 'npm run payload migrate && npm run start']
 
   workers:
-    build: ../backend
+    build: .
     restart: unless-stopped
     env_file:
-      - ../backend/.env.production
+      - .env.production
     environment:
       REDIS_URL: redis://redis:6379
       PISTON_URL: http://piston:2000
@@ -47,18 +50,6 @@ services:
     depends_on:
       - backend
       - redis
-
-  frontend:
-    build:
-      context: ../frontend
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_API_URL}
-    restart: unless-stopped
-    environment:
-      PORT: '3001'
-    depends_on:
-      - backend
 
   redis:
     image: redis:7-alpine
